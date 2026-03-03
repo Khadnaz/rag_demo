@@ -92,4 +92,4 @@ python -m pytest tests/ -v
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | Your OpenAI API key |
+| `OPENAI_API_KEY` | Yes | Your OpenAI API key | for local usage rename .env.example to .env and add your OPENAI_API_KEY
