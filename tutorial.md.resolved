@@ -1,0 +1,107 @@
+# Beginner's Guide: Building a RAG Knowledge Assistant
+
+This tutorial explains the core concepts behind the personal knowledge assistant project in this repository. It is written for software engineers with basic Python knowledge but zero prior experience with AI, RAG, or React.
+
+---
+
+## 📋 The Assignment & Approach
+
+This project was built to fulfill a specific assignment specification. The goal was to build a minimal but production-quality **RAG-powered personal knowledge assistant**. 
+
+### Core Requirements
+- **Backend**: Python 3.9+ using FastAPI.
+- **Frontend**: React (Create React App).
+- **AI Integration**: OpenAI APIs for generating embeddings and chat completions.
+- **Vector Database**: Use ChromaDB or FAISS for simplicity.
+
+### How We Approached It
+To meet these requirements cleanly without overengineering:
+- **FastAPI** handles the backend routing (uploading files, sending chats). 
+- **ChromaDB** was chosen over FAISS because Chroma has built-in local persistence (it automatically saves your vectors to disk in a `chroma_data/` folder without extra code).
+- **React** handles the UI components (FileUpload, Chat, DocumentList) using simple `useState` hooks, completely avoiding complex state managers like Redux since the app is small.
+- **Axios** is used in the frontend to talk to the FastAPI backend.
+
+### Project Deliverables
+The final submission required:
+1. Source code in a GitHub repo with a clear README.
+2. Setup instructions & defining environment variables needed (`OPENAI_API_KEY`).
+3. Basic documentation explaining architecture decisions (e.g., why ChromaDB).
+4. Simple test cases (at least 2-3 unit tests covering the core text chunking logic).
+
+Now that we know *what* we built and *why* we chose those tools, let's understand *how* the AI magic actually works.
+
+---
+
+## 🧠 What is RAG?
+
+**RAG** stands for **Retrieval-Augmented Generation**. 
+
+If you ask a standard AI model (like ChatGPT) a question about a private document you wrote yesterday, it won't know the answer because it wasn't trained on your data.
+
+RAG solves this simply by giving the AI an "open book test."
+1. You **Retrieve** relevant information from your private documents.
+2. You **Augment** the AI's prompt by pasting that information in.
+3. You ask the AI to **Generate** an answer *strictly based on the pasted text*.
+
+In our app, when a user asks "What is the company vacation policy?", the backend secretly searches the uploaded documents, grabs the paragraph about vacation days, and sends it to OpenAI along with the question. The result is a highly accurate, customized answer instead of hallucinated garbage.
+
+---
+
+## How Documents Become Searchable: Embeddings
+
+To find the "relevant information" mentioned above, we use **Embeddings**.
+
+Computers don't understand text meanings, but they are great at math. An **embedding** is just a way to convert a chunk of text into a giant array of floating-point numbers (a "vector"). 
+
+Imagine plotting words on a 2D graph based on meaning: "Dog" and "Puppy" would be close together, while "Car" is far away. Modern embeddings do this, but instead of 2 dimensions, they use over 1,500 dimensions to capture incredibly nuanced semantic meaning.
+
+### The Ingestion Pipeline
+
+When a user uploads a PDF in our app, the backend does the following:
+1. **Extraction**: Reads the raw text from the file (using Python's `PyPDF2`).
+2. **Chunking**: Splits the giant block of text into smaller, overlapping paragraphs (e.g., ~500 characters each). If chunks are too big, the AI gets confused; if they're too small, they lack context.
+3. **Embedding**: Sends each chunk to OpenAI's `text-embedding-3-small` model. OpenAI returns a 1,536-number array for each chunk.
+4. **Storage**: Saves the text chunks and their number arrays in a **Vector Database**. We use **ChromaDB**, which is a specialized database built specifically to store and rapidly search through massive number arrays.
+
+### The Retrieval Pipeline
+
+When the user asks a question, the reverse happens:
+1. The question itself is turned into an embedding (a number array).
+2. The Vector DB performs a **Similarity Search** (usually calculating the geometric distance between arrays). It finds the 5 chunks of text whose number arrays are mathematically closest to the question's array.
+3. Those 5 chunks are handed to `gpt-3.5-turbo` to formulate the final answer.
+
+---
+
+## The Frontend: React Basics
+
+Our backend provides an API, but we need a user interface. We use **React**, a popular JavaScript library for building web interfaces.
+
+If you know Python, think of a React **Component** like a Python Class that outputs HTML. 
+
+### Core React Concepts in this App:
+
+1. **Components ([.js](file:///c:/Users/User/Desktop/rag/frontend/src/App.js) files)**
+   Instead of writing one massive HTML file, React splits the UI into reusable pieces. In our app, we have three main components: `<FileUpload />`, `<DocumentList />`, and `<Chat />`. These are all stitched together inside the main layout, `<App />`.
+
+2. **State (`useState`)**
+   React uses "State" to track variables that, when changed, should cause the screen to automatically redraw.
+   For example, in our [Chat.js](file:///c:/Users/User/Desktop/rag/frontend/src/components/Chat.js), we have:
+   ```javascript
+   const [messages, setMessages] = useState([]);
+   ```
+   When the user sends a message, we call `setMessages(...)`. React detects this change and instantly updates the DOM to display the new chat bubble without the user needing to refresh the page.
+
+3. **API Calls (`axios`)**
+   React runs entirely in the user's web browser. To talk to our Python backend, it uses HTTP requests. We mapped out clean functions using the `axios` library ([api.js](file:///c:/Users/User/Desktop/rag/frontend/src/api.js)) to handle the `POST` and `GET` requests seamlessly under the hood.
+
+---
+
+## Summary of the Entire Flow
+
+1. You upload `company_handbook.pdf` via the **React FileUpload Component**.
+2. **FastAPI** ([main.py](file:///c:/Users/User/Desktop/rag/backend/main.py)) receives it, extracts the text, and splits it into 50 chunks of 500 characters each.
+3. **OpenAI** turns those 50 chunks into mathematical embeddings.
+4. **ChromaDB** saves the chunks and their math.
+5. You type into the **React Chat Component**: *"How many vacation days do I get?"*
+6. **FastAPI** embeds that question, asks **ChromaDB** to find the 3 matching chunks, and sends those chunks to **OpenAI's GPT-3.5** to write a human-readable summary.
+7. The answer streams back to the browser, updating the React State, and pops up on the screen.
